@@ -1,0 +1,94 @@
+import java.util.*;
+import java.util.stream.Collectors;
+
+public class RecommendationEngine {
+
+    // Sample dataset: User ratings for movies
+    private static final Map<String, Map<String, Double>> userRatings = new HashMap<>();
+
+    static {
+        // Adding sample data
+        userRatings.put("Alice", Map.of("Inception", 5.0, "Titanic", 3.0, "Avatar", 4.0));
+        userRatings.put("Bob", Map.of("Inception", 4.0, "Titanic", 5.0, "Avatar", 2.0));
+        userRatings.put("Charlie", Map.of("Inception", 2.0, "Titanic", 4.0, "Avatar", 5.0));
+        userRatings.put("David", Map.of("Titanic", 5.0, "Avatar", 3.0, "Interstellar", 4.0));
+    }
+
+    public static void main(String[] args) {
+        String targetUser = "Alice";
+        List<String> recommendations = getRecommendations(targetUser, 2);
+
+        System.out.println("Recommendations for " + targetUser + ": " + recommendations);
+    }
+
+    // Method to get recommendations
+    private static List<String> getRecommendations(String targetUser, int topN) {
+        Map<String, Double> targetRatings = userRatings.get(targetUser);
+        if (targetRatings == null) {
+            throw new IllegalArgumentException("User not found in the dataset!");
+        }
+
+        // Find similarity scores with other users
+        Map<String, Double> similarityScores = new HashMap<>();
+        for (String user : userRatings.keySet()) {
+            if (!user.equals(targetUser)) {
+                double similarity = calculateSimilarity(targetRatings, userRatings.get(user));
+                similarityScores.put(user, similarity);
+            }
+        }
+
+        // Sort users by similarity scores (descending order)
+        List<String> similarUsers = similarityScores.entrySet().stream()
+                .sorted((a, b) -> Double.compare(b.getValue(), a.getValue()))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+
+        // Collect movie recommendations from similar users
+        Map<String, Double> recommendationScores = new HashMap<>();
+        for (String similarUser : similarUsers) {
+            Map<String, Double> similarUserRatings = userRatings.get(similarUser);
+            for (Map.Entry<String, Double> entry : similarUserRatings.entrySet()) {
+                String movie = entry.getKey();
+                double rating = entry.getValue();
+
+                // Skip movies already rated by the target user
+                if (!targetRatings.containsKey(movie)) {
+                    recommendationScores.merge(movie, rating, Double::sum);
+                }
+            }
+        }
+
+        // Sort recommendations by scores (descending order)
+        return recommendationScores.entrySet().stream()
+                .sorted((a, b) -> Double.compare(b.getValue(), a.getValue()))
+                .limit(topN) // Get top N recommendations
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+    }
+
+    // Method to calculate similarity (Cosine Similarity)
+    private static double calculateSimilarity(Map<String, Double> ratingsA, Map<String, Double> ratingsB) {
+        double dotProduct = 0.0, magnitudeA = 0.0, magnitudeB = 0.0;
+
+        for (String movie : ratingsA.keySet()) {
+            double ratingA = ratingsA.get(movie);
+            magnitudeA += ratingA * ratingA;
+
+            if (ratingsB.containsKey(movie)) {
+                double ratingB = ratingsB.get(movie);
+                dotProduct += ratingA * ratingB;
+            }
+        }
+
+        for (double ratingB : ratingsB.values()) {
+            magnitudeB += ratingB * ratingB;
+        }
+
+        // Avoid division by zero
+        if (magnitudeA == 0 || magnitudeB == 0) {
+            return 0.0;
+        }
+
+        return dotProduct / (Math.sqrt(magnitudeA) * Math.sqrt(magnitudeB));
+    }
+}
